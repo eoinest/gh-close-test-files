@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub Test File Reviewer",
+  "version": "0.1.0",
+  "description": "Mark every GitHub pull-request file whose path contains __test__ as viewed.",
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/*/pull/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["https://github.com/*/*/pull/*"]
+}
+
