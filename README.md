@@ -6,9 +6,9 @@ Matching is case-insensitive. A file matches when its path contains the literal 
 
 ## Screenshot
 
-![GitHub Test File Reviewer marking two matching files as viewed on a public GT pull request](docs/gt-pr-2073.png)
+![GitHub Test File Reviewer finding two Vue test files on a public GT pull request](docs/gt-vue-pr-2062.png)
 
-Shown on [`generaltranslation/gt` pull request #2073](https://github.com/generaltranslation/gt/pull/2073/changes).
+Shown on [`generaltranslation/gt` pull request #2062](https://github.com/generaltranslation/gt/pull/2062/changes).
 
 ## Install
 
