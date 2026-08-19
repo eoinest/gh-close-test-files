@@ -1,8 +1,8 @@
 # GitHub Test File Reviewer
 
-A deliberately small Chrome extension for GitHub pull requests. On a PR's **Files changed** page, it adds a compact dropdown in the lower-right corner that marks every file whose path contains `__test__` as **Viewed**. GitHub then collapses those files in the usual way.
+A deliberately small Chrome extension for GitHub pull requests. On a PR's **Files changed** page, it adds a compact dropdown in the lower-right corner that marks matching test files as **Viewed**. GitHub then collapses those files in the usual way.
 
-The match is case-insensitive and literal: `src/__test__/button.ts` and `src/button.__test__.ts` match, while `src/__tests__/button.ts` and `src/button.test.ts` do not.
+Matching is case-insensitive. A file matches when its path contains the literal `__test__` or its filename follows `*.test.*`, such as `src/__test__/button.ts`, `src/button.__test__.ts`, or `src/button.test.tsx`.
 
 ## Install
 
@@ -36,4 +36,3 @@ node scripts/fixture-server.mjs
 ```
 
 Visit `http://127.0.0.1:4173/eoinest/example/pull/1/files`. The fixture loads the built content script directly so the review interaction can be exercised without changing a real pull request.
-

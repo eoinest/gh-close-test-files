@@ -10,11 +10,13 @@ test('recognizes GitHub files and changes routes', () => {
   assert.equal(isPullRequestChangesPath('/eoinest/example/issues/12/files'), false);
 });
 
-test('matches a literal __test__ anywhere in a path, case-insensitively', () => {
+test('matches literal __test__ paths and *.test.* filenames case-insensitively', () => {
   assert.equal(isTestFilePath('src/__test__/button.tsx'), true);
   assert.equal(isTestFilePath('src/button.__test__.tsx'), true);
   assert.equal(isTestFilePath('src/__TEST__/button.tsx'), true);
+  assert.equal(isTestFilePath('src/button.test.ts'), true);
+  assert.equal(isTestFilePath('src/menu.TEST.tsx'), true);
   assert.equal(isTestFilePath('src/__tests__/button.tsx'), false);
-  assert.equal(isTestFilePath('src/button.test.tsx'), false);
+  assert.equal(isTestFilePath('src/folder.test/button.tsx'), false);
+  assert.equal(isTestFilePath('src/button.spec.tsx'), false);
 });
-

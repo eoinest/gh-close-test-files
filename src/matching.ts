@@ -6,6 +6,7 @@ export function isPullRequestChangesPath(pathname: string): boolean {
 }
 
 export function isTestFilePath(path: string): boolean {
-  return path.toLocaleLowerCase('en-US').includes('__test__');
+  const normalizedPath = path.toLocaleLowerCase('en-US');
+  const filename = normalizedPath.split('/').at(-1) ?? normalizedPath;
+  return normalizedPath.includes('__test__') || filename.includes('.test.');
 }
-

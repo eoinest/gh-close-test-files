@@ -6,7 +6,9 @@
     return PULL_REQUEST_CHANGES_ROUTE.test(pathname);
   }
   function isTestFilePath(path) {
-    return path.toLocaleLowerCase("en-US").includes("__test__");
+    const normalizedPath = path.toLocaleLowerCase("en-US");
+    const filename = normalizedPath.split("/").at(-1) ?? normalizedPath;
+    return normalizedPath.includes("__test__") || filename.includes(".test.");
   }
 
   // src/github.ts
