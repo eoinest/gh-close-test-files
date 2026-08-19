@@ -4,6 +4,12 @@ A deliberately small Chrome extension for GitHub pull requests. On a PR's **File
 
 Matching is case-insensitive. A file matches when its path contains the literal `__test__` or its filename follows `*.test.*`, such as `src/__test__/button.ts`, `src/button.__test__.ts`, or `src/button.test.tsx`.
 
+## Screenshot
+
+![GitHub Test File Reviewer marking two matching files as viewed on a public GT pull request](docs/gt-pr-2073.png)
+
+Shown on [`generaltranslation/gt` pull request #2073](https://github.com/generaltranslation/gt/pull/2073/changes).
+
 ## Install
 
 1. Install dependencies and build the extension:
