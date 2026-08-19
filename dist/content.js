@@ -112,9 +112,13 @@
 
   // src/content.ts
   var CONTROL_ID = "gh-test-file-reviewer";
-  var CLICK_DELAY_MS = 175;
+  var SETTLE_TIMEOUT_MS = 1200;
+  var suppressRefreshUntil = 0;
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+  function nextAnimationFrame() {
+    return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
   }
   function createControl() {
     const host = document.createElement("div");
@@ -193,6 +197,7 @@
     const button = host.shadowRoot?.querySelector("button");
     const status = host.shadowRoot?.querySelector('[role="status"]');
     if (!button || !status) return;
+    host.dataset.controlState = state;
     const targets = findTestReviewTargets();
     const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
     button.disabled = state === "working" || remaining === 0;
@@ -200,20 +205,33 @@
     status.textContent = message ?? (targets.length === 0 ? "No matching files found." : remaining === 0 ? `All ${targets.length} matching file${targets.length === 1 ? "" : "s"} viewed.` : `${remaining} matching file${remaining === 1 ? "" : "s"} to mark.`);
   }
   async function markTestFilesViewed(host) {
-    updateControl(host, "working", "Starting\u2026");
-    const targets = findTestReviewTargets().filter(({ control }) => !isReviewControlChecked(control));
-    let marked = 0;
-    for (const { control } of targets) {
-      if (!control.isConnected || isReviewControlChecked(control) || isReviewControlDisabled(control)) continue;
-      control.click();
-      await delay(CLICK_DELAY_MS);
-      if (isReviewControlChecked(control)) marked += 1;
-      updateControl(host, "working", `Marked ${marked} of ${targets.length}.`);
+    if (host.dataset.controlState === "working") return;
+    const targets = findTestReviewTargets().filter(({ control }) => control.isConnected && !isReviewControlChecked(control) && !isReviewControlDisabled(control));
+    if (targets.length === 0) {
+      updateControl(host, "idle", "No files needed updating.");
+      return;
     }
     updateControl(
       host,
+      "working",
+      `Marking ${targets.length} file${targets.length === 1 ? "" : "s"}\u2026`
+    );
+    suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
+    await nextAnimationFrame();
+    for (const { control } of targets) {
+      control.click();
+    }
+    const deadline = window.performance.now() + SETTLE_TIMEOUT_MS;
+    let marked = 0;
+    do {
+      marked = targets.filter(({ control }) => !control.isConnected || isReviewControlChecked(control)).length;
+      if (marked === targets.length) break;
+      await delay(50);
+    } while (window.performance.now() < deadline);
+    updateControl(
+      host,
       "idle",
-      marked === 0 ? "No files needed updating." : `Marked ${marked} file${marked === 1 ? "" : "s"} as viewed.`
+      marked < targets.length ? `Queued ${targets.length} files; GitHub is still updating.` : `Marked ${marked} file${marked === 1 ? "" : "s"} as viewed.`
     );
   }
   function syncControl() {
@@ -228,9 +246,12 @@
   var observer = new MutationObserver(() => {
     window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
+      if (window.performance.now() < suppressRefreshUntil) return;
       syncControl();
       const host = document.getElementById(CONTROL_ID);
-      if (host) updateControl(host, "idle");
+      if (host && host.dataset.controlState !== "working") {
+        updateControl(host, "idle");
+      }
     }, 150);
   });
   syncControl();
