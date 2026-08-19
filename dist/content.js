@@ -112,13 +112,12 @@
 
   // src/content.ts
   var CONTROL_ID = "gh-test-file-reviewer";
-  var SETTLE_TIMEOUT_MS = 1200;
+  var SETTLE_TIMEOUT_MS = 2500;
+  var DOM_QUIET_MS = 250;
   var suppressRefreshUntil = 0;
+  var lastPageMutationAt = window.performance.now();
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-  }
-  function nextAnimationFrame() {
-    return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
   }
   function createControl() {
     const host = document.createElement("div");
@@ -133,6 +132,7 @@
         font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         position: fixed;
         right: 20px;
+        view-transition-name: gh-test-review-control;
         z-index: 2147483000;
       }
 
@@ -216,23 +216,57 @@
       "working",
       `Marking ${targets.length} file${targets.length === 1 ? "" : "s"}\u2026`
     );
-    suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
-    await nextAnimationFrame();
-    for (const { control } of targets) {
-      control.click();
-    }
-    const deadline = window.performance.now() + SETTLE_TIMEOUT_MS;
     let marked = 0;
-    do {
-      marked = targets.filter(({ control }) => !control.isConnected || isReviewControlChecked(control)).length;
-      if (marked === targets.length) break;
-      await delay(50);
-    } while (window.performance.now() < deadline);
+    suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
+    await runWithViewTransition(async () => {
+      for (const { control } of targets) {
+        control.click();
+      }
+      const deadline = window.performance.now() + SETTLE_TIMEOUT_MS;
+      do {
+        marked = targets.filter(({ control }) => !control.isConnected || isReviewControlChecked(control)).length;
+        const pageIsQuiet = window.performance.now() - lastPageMutationAt >= DOM_QUIET_MS;
+        if (marked === targets.length && pageIsQuiet) break;
+        await delay(50);
+      } while (window.performance.now() < deadline);
+    });
     updateControl(
       host,
       "idle",
       marked < targets.length ? `Queued ${targets.length} files; GitHub is still updating.` : `Marked ${marked} file${marked === 1 ? "" : "s"} as viewed.`
     );
+  }
+  async function runWithViewTransition(update) {
+    if (typeof document.startViewTransition !== "function") {
+      await update();
+      return;
+    }
+    const transitionStyle = document.createElement("style");
+    transitionStyle.textContent = `
+    ::view-transition-group(root) {
+      animation-duration: 180ms;
+      animation-timing-function: ease-out;
+    }
+
+    ::view-transition-group(gh-test-review-control),
+    ::view-transition-old(gh-test-review-control),
+    ::view-transition-new(gh-test-review-control) {
+      animation: none;
+    }
+  `;
+    document.head.append(transitionStyle);
+    let updateStarted = false;
+    try {
+      const transition = document.startViewTransition(async () => {
+        updateStarted = true;
+        await update();
+      });
+      await transition.finished;
+    } catch {
+      if (!updateStarted) await update();
+    } finally {
+      transitionStyle.remove();
+    }
   }
   function syncControl() {
     const existing = document.getElementById(CONTROL_ID);
@@ -244,6 +278,7 @@
   }
   var refreshTimer = 0;
   var observer = new MutationObserver(() => {
+    lastPageMutationAt = window.performance.now();
     window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
       if (window.performance.now() < suppressRefreshUntil) return;
