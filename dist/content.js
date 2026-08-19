@@ -112,12 +112,18 @@
 
   // src/content.ts
   var CONTROL_ID = "gh-test-file-reviewer";
-  var SETTLE_TIMEOUT_MS = 2500;
-  var DOM_QUIET_MS = 250;
+  var LOADING_OVERLAY_ID = "gh-test-file-reviewer-loading";
+  var SETTLE_TIMEOUT_MS = 1e4;
+  var DOM_QUIET_MS = 350;
   var suppressRefreshUntil = 0;
   var lastPageMutationAt = window.performance.now();
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+  function waitForPaint() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+    });
   }
   function createControl() {
     const host = document.createElement("div");
@@ -132,7 +138,6 @@
         font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         position: fixed;
         right: 20px;
-        view-transition-name: gh-test-review-control;
         z-index: 2147483000;
       }
 
@@ -218,7 +223,9 @@
     );
     let marked = 0;
     suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
-    await runWithViewTransition(async () => {
+    const loadingOverlay = showLoadingOverlay(targets.length);
+    await waitForPaint();
+    try {
       for (const { control } of targets) {
         control.click();
       }
@@ -229,44 +236,75 @@
         if (marked === targets.length && pageIsQuiet) break;
         await delay(50);
       } while (window.performance.now() < deadline);
-    });
+    } finally {
+      await hideLoadingOverlay(loadingOverlay);
+    }
     updateControl(
       host,
       "idle",
       marked < targets.length ? `Queued ${targets.length} files; GitHub is still updating.` : `Marked ${marked} file${marked === 1 ? "" : "s"} as viewed.`
     );
   }
-  async function runWithViewTransition(update) {
-    if (typeof document.startViewTransition !== "function") {
-      await update();
-      return;
-    }
-    const transitionStyle = document.createElement("style");
-    transitionStyle.textContent = `
-    ::view-transition-group(root) {
-      animation-duration: 180ms;
-      animation-timing-function: ease-out;
-    }
+  function showLoadingOverlay(fileCount) {
+    document.getElementById(LOADING_OVERLAY_ID)?.remove();
+    const host = document.createElement("div");
+    host.id = LOADING_OVERLAY_ID;
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+    <style>
+      :host {
+        align-items: center;
+        background: var(--bgColor-default, Canvas);
+        color: var(--fgColor-default, CanvasText);
+        display: flex;
+        font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        inset: 0;
+        justify-content: center;
+        opacity: 1;
+        position: fixed;
+        transition: opacity 140ms ease-out;
+        z-index: 2147483646;
+      }
 
-    ::view-transition-group(gh-test-review-control),
-    ::view-transition-old(gh-test-review-control),
-    ::view-transition-new(gh-test-review-control) {
-      animation: none;
-    }
+      .loading {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+      }
+
+      .spinner {
+        animation: spin 700ms linear infinite;
+        border: 3px solid var(--borderColor-muted, ButtonBorder);
+        border-radius: 50%;
+        border-top-color: var(--fgColor-accent, Highlight);
+        height: 24px;
+        width: 24px;
+      }
+
+      strong { font-size: 15px; }
+      span { color: var(--fgColor-muted, GrayText); }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      @media (prefers-reduced-motion: reduce) {
+        :host { transition: none; }
+        .spinner { animation-duration: 1.4s; }
+      }
+    </style>
+    <div class="loading" role="status" aria-live="assertive">
+      <div class="spinner" aria-hidden="true"></div>
+      <strong>Marking ${fileCount} test file${fileCount === 1 ? "" : "s"} as viewed\u2026</strong>
+      <span>Waiting for GitHub to finish</span>
+    </div>
   `;
-    document.head.append(transitionStyle);
-    let updateStarted = false;
-    try {
-      const transition = document.startViewTransition(async () => {
-        updateStarted = true;
-        await update();
-      });
-      await transition.finished;
-    } catch {
-      if (!updateStarted) await update();
-    } finally {
-      transitionStyle.remove();
-    }
+    document.body.append(host);
+    return host;
+  }
+  async function hideLoadingOverlay(host) {
+    host.style.opacity = "0";
+    await delay(160);
+    host.remove();
   }
   function syncControl() {
     const existing = document.getElementById(CONTROL_ID);
