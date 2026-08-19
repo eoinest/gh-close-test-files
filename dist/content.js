@@ -23,19 +23,24 @@
   function normalized(value) {
     return value?.trim().replace(/^\u200e/, "") ?? "";
   }
-  function labelText(checkbox) {
-    const labels = Array.from(checkbox.labels ?? [], (label) => label.textContent ?? "");
+  function labelText(control) {
+    const labels = control instanceof HTMLInputElement ? Array.from(control.labels ?? [], (label) => label.textContent ?? "") : [];
+    const labelledBy = (control.getAttribute("aria-labelledby") ?? "").split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? "");
     return [
-      checkbox.getAttribute("aria-label") ?? "",
-      checkbox.getAttribute("title") ?? "",
-      checkbox.dataset.testid ?? "",
-      checkbox.className,
+      control.getAttribute("aria-label") ?? "",
+      control.getAttribute("title") ?? "",
+      control.dataset.testid ?? "",
+      control.className,
+      ...labelledBy,
       ...labels
     ].join(" ").replace(/\s+/g, " ").trim();
   }
-  function isViewedCheckbox(checkbox) {
-    if (checkbox.classList.contains("js-reviewed-checkbox")) return true;
-    return /\b(viewed|mark(?: this)? file as viewed)\b/i.test(labelText(checkbox));
+  function isViewedControl(control) {
+    if (control.classList.contains("js-reviewed-checkbox")) return true;
+    if (Array.from(control.classList).some((name) => name.includes("MarkAsViewedButton"))) {
+      return true;
+    }
+    return /\b(viewed|mark(?: this)? file as viewed)\b/i.test(labelText(control));
   }
   function pathFromElement(element) {
     for (const attribute of ["data-path", "data-file-path", "data-tagsearch-path"]) {
@@ -48,35 +53,56 @@
       "[data-tagsearch-path]",
       '[data-testid="file-name"]',
       ".file-info a[title]",
-      'a[data-pjax="#repo-content-pjax-container"][title]'
+      'a[data-pjax="#repo-content-pjax-container"][title]',
+      'a[href^="#diff-"]',
+      '[aria-label^="File path:"]'
     ].join(","));
     if (!pathElement) return "";
     for (const attribute of ["data-path", "data-file-path", "data-tagsearch-path", "title"]) {
       const value = normalized(pathElement.getAttribute(attribute));
       if (value) return value;
     }
+    const ariaLabel = normalized(pathElement.getAttribute("aria-label"));
+    if (ariaLabel.toLocaleLowerCase("en-US").startsWith("file path:")) {
+      return ariaLabel.slice("file path:".length).trim();
+    }
     return normalized(pathElement.textContent);
   }
-  function findFileContainer(checkbox) {
-    let current = checkbox;
+  function findFileContainer(control) {
+    let current = control;
     while (current && current !== document.body) {
-      if (current.matches(FILE_CONTAINER_SELECTOR) && pathFromElement(current)) {
+      if (pathFromElement(current)) {
         return current;
       }
       current = current.parentElement;
     }
-    return checkbox.closest(FILE_CONTAINER_SELECTOR);
+    return control.closest(FILE_CONTAINER_SELECTOR);
+  }
+  function isReviewControlChecked(control) {
+    if (control instanceof HTMLInputElement) return control.checked;
+    return control.getAttribute("aria-checked") === "true" || control.getAttribute("aria-pressed") === "true" || control.dataset.state === "checked";
+  }
+  function isReviewControlDisabled(control) {
+    if (control instanceof HTMLInputElement || control instanceof HTMLButtonElement) {
+      return control.disabled;
+    }
+    return control.getAttribute("aria-disabled") === "true";
   }
   function findReviewTargets(root = document) {
     const targets = [];
     const seen = /* @__PURE__ */ new Set();
-    for (const checkbox of root.querySelectorAll('input[type="checkbox"]')) {
-      if (seen.has(checkbox) || !isViewedCheckbox(checkbox)) continue;
-      const container = findFileContainer(checkbox);
+    const controls = root.querySelectorAll([
+      'input[type="checkbox"]',
+      "button[aria-pressed]",
+      '[role="checkbox"]'
+    ].join(","));
+    for (const control of controls) {
+      if (seen.has(control) || !isViewedControl(control)) continue;
+      const container = findFileContainer(control);
       const path = container ? pathFromElement(container) : "";
       if (!path) continue;
-      seen.add(checkbox);
-      targets.push({ checkbox, path });
+      seen.add(control);
+      targets.push({ control, path });
     }
     return targets;
   }
@@ -168,20 +194,20 @@
     const status = host.shadowRoot?.querySelector('[role="status"]');
     if (!button || !status) return;
     const targets = findTestReviewTargets();
-    const remaining = targets.filter(({ checkbox }) => !checkbox.checked).length;
+    const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
     button.disabled = state === "working" || remaining === 0;
     button.textContent = state === "working" ? "Marking\u2026" : "Mark as viewed";
     status.textContent = message ?? (targets.length === 0 ? "No matching files found." : remaining === 0 ? `All ${targets.length} matching file${targets.length === 1 ? "" : "s"} viewed.` : `${remaining} matching file${remaining === 1 ? "" : "s"} to mark.`);
   }
   async function markTestFilesViewed(host) {
     updateControl(host, "working", "Starting\u2026");
-    const targets = findTestReviewTargets().filter(({ checkbox }) => !checkbox.checked);
+    const targets = findTestReviewTargets().filter(({ control }) => !isReviewControlChecked(control));
     let marked = 0;
-    for (const { checkbox } of targets) {
-      if (!checkbox.isConnected || checkbox.checked || checkbox.disabled) continue;
-      checkbox.click();
+    for (const { control } of targets) {
+      if (!control.isConnected || isReviewControlChecked(control) || isReviewControlDisabled(control)) continue;
+      control.click();
       await delay(CLICK_DELAY_MS);
-      if (checkbox.checked) marked += 1;
+      if (isReviewControlChecked(control)) marked += 1;
       updateControl(host, "working", `Marked ${marked} of ${targets.length}.`);
     }
     updateControl(

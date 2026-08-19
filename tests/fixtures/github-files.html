@@ -5,10 +5,10 @@
     <title>GitHub file review fixture</title>
     <style>
       body { font: 14px system-ui; margin: 30px; }
-      .js-file { border: 1px solid #d0d7de; border-radius: 6px; margin: 16px 0; }
+      .js-file, .new-file-card { border: 1px solid #d0d7de; border-radius: 6px; margin: 16px 0; }
       .file-header { align-items: center; background: #f6f8fa; display: flex; gap: 10px; padding: 10px; }
       pre { margin: 0; padding: 18px; }
-      .js-file.reviewed pre { display: none; }
+      .js-file.reviewed pre, .new-file-card.reviewed pre { display: none; }
     </style>
   </head>
   <body>
@@ -25,14 +25,21 @@
       <div class="file-header"><strong>src/menu.__test__.ts</strong><label><input class="js-reviewed-checkbox" type="checkbox" /> Viewed</label></div>
       <pre>test('menu', () =&gt; {});</pre>
     </div>
-    <div class="js-file" data-path="src/dialog.test.tsx">
-      <div class="file-header"><strong>src/dialog.test.tsx</strong><label><input class="js-reviewed-checkbox" type="checkbox" /> Viewed</label></div>
+    <section class="new-file-card">
+      <div class="file-header"><a href="#diff-dialog">src/dialog.test.tsx</a><button type="button" aria-label="Viewed" aria-pressed="false">Viewed</button></div>
       <pre>test('dialog', () =&gt; {});</pre>
-    </div>
+    </section>
     <script>
       for (const checkbox of document.querySelectorAll('.js-reviewed-checkbox')) {
         checkbox.addEventListener('change', () => {
           checkbox.closest('.js-file').classList.toggle('reviewed', checkbox.checked);
+        });
+      }
+      for (const button of document.querySelectorAll('button[aria-pressed]')) {
+        button.addEventListener('click', () => {
+          const viewed = button.getAttribute('aria-pressed') === 'true';
+          button.setAttribute('aria-pressed', String(!viewed));
+          button.closest('.new-file-card').classList.toggle('reviewed', !viewed);
         });
       }
     </script>

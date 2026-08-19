@@ -1,4 +1,8 @@
-import { findTestReviewTargets } from './github';
+import {
+  findTestReviewTargets,
+  isReviewControlChecked,
+  isReviewControlDisabled,
+} from './github';
 import { isPullRequestChangesPath } from './matching';
 
 const CONTROL_ID = 'gh-test-file-reviewer';
@@ -93,7 +97,7 @@ function updateControl(host: HTMLElement, state: ControlState, message?: string)
   if (!button || !status) return;
 
   const targets = findTestReviewTargets();
-  const remaining = targets.filter(({ checkbox }) => !checkbox.checked).length;
+  const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
   button.disabled = state === 'working' || remaining === 0;
   button.textContent = state === 'working' ? 'Marking…' : 'Mark as viewed';
   status.textContent = message ?? (
@@ -107,14 +111,19 @@ function updateControl(host: HTMLElement, state: ControlState, message?: string)
 
 async function markTestFilesViewed(host: HTMLElement): Promise<void> {
   updateControl(host, 'working', 'Starting…');
-  const targets = findTestReviewTargets().filter(({ checkbox }) => !checkbox.checked);
+  const targets = findTestReviewTargets()
+    .filter(({ control }) => !isReviewControlChecked(control));
   let marked = 0;
 
-  for (const { checkbox } of targets) {
-    if (!checkbox.isConnected || checkbox.checked || checkbox.disabled) continue;
-    checkbox.click();
+  for (const { control } of targets) {
+    if (
+      !control.isConnected
+      || isReviewControlChecked(control)
+      || isReviewControlDisabled(control)
+    ) continue;
+    control.click();
     await delay(CLICK_DELAY_MS);
-    if (checkbox.checked) marked += 1;
+    if (isReviewControlChecked(control)) marked += 1;
     updateControl(host, 'working', `Marked ${marked} of ${targets.length}.`);
   }
 
@@ -152,4 +161,3 @@ syncControl();
 observer.observe(document.documentElement, { childList: true, subtree: true });
 window.addEventListener('popstate', syncControl);
 document.addEventListener('turbo:load', syncControl);
-
