@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isPullRequestChangesPath, isTestFilePath } from '../src/matching.ts';
+import {
+  containsTestDirectory,
+  isPullRequestChangesPath,
+  isTestFilePath,
+} from '../src/matching.ts';
 
 test('recognizes GitHub files and changes routes', () => {
   assert.equal(isPullRequestChangesPath('/eoinest/example/pull/12/files'), true);
@@ -19,4 +23,13 @@ test('matches literal __test__ paths and *.test.* filenames case-insensitively',
   assert.equal(isTestFilePath('src/__tests__/button.tsx'), false);
   assert.equal(isTestFilePath('src/folder.test/button.tsx'), false);
   assert.equal(isTestFilePath('src/button.spec.tsx'), false);
+});
+
+test('matches __test__ directory segments in file-tree labels', () => {
+  assert.equal(containsTestDirectory('__test__'), true);
+  assert.equal(containsTestDirectory('src/__test__'), true);
+  assert.equal(containsTestDirectory('src\\__TEST__\\unit'), true);
+  assert.equal(containsTestDirectory('__tests__'), false);
+  assert.equal(containsTestDirectory('src/button.__test__'), false);
+  assert.equal(containsTestDirectory('src/__test__-fixtures'), false);
 });

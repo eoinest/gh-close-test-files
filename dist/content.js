@@ -10,6 +10,9 @@
     const filename = normalizedPath.split("/").at(-1) ?? normalizedPath;
     return normalizedPath.includes("__test__") || filename.includes(".test.");
   }
+  function containsTestDirectory(path) {
+    return path.toLocaleLowerCase("en-US").split(/[\\/]/).some((segment) => segment.trim() === "__test__");
+  }
 
   // src/github.ts
   var FILE_CONTAINER_SELECTOR = [
@@ -20,6 +23,7 @@
     "[data-file-path]",
     "[data-tagsearch-path]"
   ].join(",");
+  var FILE_TREE_SELECTOR = '[role="tree"][aria-label="File Tree"]';
   function normalized(value) {
     return value?.trim().replace(/^\u200e/, "") ?? "";
   }
@@ -108,6 +112,12 @@
   }
   function findTestReviewTargets(root = document) {
     return findReviewTargets(root).filter(({ path }) => isTestFilePath(path));
+  }
+  function findExpandedTestDirectoryControls(root = document) {
+    const controls = root.querySelectorAll(
+      `${FILE_TREE_SELECTOR} button[aria-expanded="true"]`
+    );
+    return Array.from(controls).filter((control) => containsTestDirectory(normalized(control.textContent)));
   }
 
   // src/content.ts
@@ -222,12 +232,18 @@
       `Marking ${targets.length} file${targets.length === 1 ? "" : "s"}\u2026`
     );
     let marked = 0;
+    let collapsedDirectories = 0;
     suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
     const loadingOverlay = showLoadingOverlay(targets.length);
     await waitForPaint();
     try {
       for (const { control } of targets) {
         control.click();
+      }
+      for (const control of findExpandedTestDirectoryControls()) {
+        if (!control.isConnected || control.getAttribute("aria-expanded") !== "true") continue;
+        control.click();
+        collapsedDirectories += 1;
       }
       const deadline = window.performance.now() + SETTLE_TIMEOUT_MS;
       do {
@@ -242,7 +258,10 @@
     updateControl(
       host,
       "idle",
-      marked < targets.length ? `Queued ${targets.length} files; GitHub is still updating.` : `Marked ${marked} file${marked === 1 ? "" : "s"} as viewed.`
+      marked < targets.length ? `Queued ${targets.length} files; GitHub is still updating.` : [
+        `Marked ${marked} file${marked === 1 ? "" : "s"} as viewed`,
+        collapsedDirectories === 0 ? "." : ` and collapsed ${collapsedDirectories} __test__ director${collapsedDirectories === 1 ? "y" : "ies"}.`
+      ].join("")
     );
   }
   function showLoadingOverlay(fileCount) {

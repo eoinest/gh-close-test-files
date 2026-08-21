@@ -10,3 +10,10 @@ export function isTestFilePath(path: string): boolean {
   const filename = normalizedPath.split('/').at(-1) ?? normalizedPath;
   return normalizedPath.includes('__test__') || filename.includes('.test.');
 }
+
+export function containsTestDirectory(path: string): boolean {
+  return path
+    .toLocaleLowerCase('en-US')
+    .split(/[\\/]/)
+    .some((segment) => segment.trim() === '__test__');
+}

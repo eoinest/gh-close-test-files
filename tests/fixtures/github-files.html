@@ -9,10 +9,25 @@
       .file-header { align-items: center; background: #f6f8fa; display: flex; gap: 10px; padding: 10px; }
       pre { margin: 0; padding: 18px; }
       .js-file.reviewed pre, .new-file-card.reviewed pre { display: none; }
+      [role="tree"] { list-style: none; padding: 0; }
+      [role="tree"] [role="group"] { list-style: none; }
+      [role="tree"] button[aria-expanded="false"] + [role="group"] { display: none; }
     </style>
   </head>
   <body>
     <h1>Files changed</h1>
+    <nav aria-label="File Tree Navigation">
+      <ul role="tree" aria-label="File Tree">
+        <li role="treeitem" data-tree-entry-type="directory">
+          <button type="button" aria-expanded="true">src/__test__</button>
+          <ul role="group"><li role="treeitem">button.ts</li></ul>
+        </li>
+        <li role="treeitem" data-tree-entry-type="directory">
+          <button type="button" aria-expanded="true">__tests__</button>
+          <ul role="group"><li role="treeitem">plural.ts</li></ul>
+        </li>
+      </ul>
+    </nav>
     <div class="js-file" data-path="src/button.ts">
       <div class="file-header"><strong>src/button.ts</strong><label><input class="js-reviewed-checkbox" type="checkbox" /> Viewed</label></div>
       <pre>export const Button = {};</pre>
@@ -44,6 +59,11 @@
           const file = button.closest('.new-file-card');
           const delay = Number(file.dataset.reviewDelay ?? 0);
           setTimeout(() => file.classList.toggle('reviewed', !viewed), delay);
+        });
+      }
+      for (const button of document.querySelectorAll('[role="tree"] button[aria-expanded]')) {
+        button.addEventListener('click', () => {
+          button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
         });
       }
     </script>

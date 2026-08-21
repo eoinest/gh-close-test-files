@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GitHub Test File Reviewer",
   "version": "0.1.0",
-  "description": "Mark matching __test__ and *.test.* GitHub pull-request files as viewed.",
+  "description": "Mark matching GitHub pull-request files as viewed and collapse __test__ directories.",
   "content_scripts": [
     {
       "matches": ["https://github.com/*/*/pull/*"],

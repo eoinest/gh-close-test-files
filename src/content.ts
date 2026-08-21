@@ -1,4 +1,5 @@
 import {
+  findExpandedTestDirectoryControls,
   findTestReviewTargets,
   isReviewControlChecked,
   isReviewControlDisabled,
@@ -142,6 +143,7 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
   );
 
   let marked = 0;
+  let collapsedDirectories = 0;
   suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
   const loadingOverlay = showLoadingOverlay(targets.length);
   await waitForPaint();
@@ -149,6 +151,12 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
   try {
     for (const { control } of targets) {
       control.click();
+    }
+
+    for (const control of findExpandedTestDirectoryControls()) {
+      if (!control.isConnected || control.getAttribute('aria-expanded') !== 'true') continue;
+      control.click();
+      collapsedDirectories += 1;
     }
 
     const deadline = window.performance.now() + SETTLE_TIMEOUT_MS;
@@ -169,7 +177,12 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
     'idle',
     marked < targets.length
       ? `Queued ${targets.length} files; GitHub is still updating.`
-      : `Marked ${marked} file${marked === 1 ? '' : 's'} as viewed.`,
+      : [
+          `Marked ${marked} file${marked === 1 ? '' : 's'} as viewed`,
+          collapsedDirectories === 0
+            ? '.'
+            : ` and collapsed ${collapsedDirectories} __test__ director${collapsedDirectories === 1 ? 'y' : 'ies'}.`,
+        ].join(''),
   );
 }
 

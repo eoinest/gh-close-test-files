@@ -1,6 +1,6 @@
 # GitHub Test File Reviewer
 
-This Chrome extension adds a small button to GitHub pull requests. Click it to mark test files as viewed and collapse them automatically.
+This Chrome extension adds a small button to GitHub pull requests. Click it to mark test files as viewed, collapse their diffs, and collapse `__test__` directories in the file-tree sidebar.
 
 Matching is case-insensitive. A file matches when its path contains the literal `__test__` or its filename follows `*.test.*`, such as `src/__test__/button.ts`, `src/button.__test__.ts`, or `src/button.test.tsx`.
 
@@ -25,7 +25,7 @@ Shown on [`generaltranslation/gt` pull request #2062](https://github.com/general
 
 ## Use
 
-Open a GitHub pull request's **Files changed** page. Open the **Test files** dropdown at the lower right and click **Mark as viewed**. Already-viewed files are left alone.
+Open a GitHub pull request's **Files changed** page. Open the **Test files** dropdown at the lower right and click **Mark as viewed**. Already-viewed files are left alone, and expanded `__test__` directories in the sidebar are collapsed at the same time.
 
 Both GitHub's `/pull/.../files` route and its `/pull/.../changes` route are supported. The extension requests access only to GitHub pull-request pages and does not send data anywhere.
 
