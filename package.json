@@ -1,6 +1,6 @@
 {
   "name": "gh-close-test-files",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "A small Chrome extension that marks GitHub test files as viewed.",
   "type": "module",

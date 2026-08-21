@@ -119,12 +119,17 @@ function updateControl(host: HTMLElement, state: ControlState, message?: string)
   const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
   const directoryControls = findTestDirectoryControls().length;
   const expandedDirectories = findExpandedTestDirectoryControls().length;
-  button.disabled = state === 'working';
-  button.textContent = state === 'working'
-    ? 'Marking…'
-    : remaining === 0
-      ? 'Collapse test directories'
-      : 'Mark as viewed';
+  const hasWork = remaining > 0 || expandedDirectories > 0;
+  button.disabled = state === 'working' || !hasWork;
+  if (state === 'working') {
+    button.textContent = 'Marking…';
+  } else if (remaining > 0) {
+    button.textContent = 'Mark as viewed';
+  } else if (expandedDirectories > 0) {
+    button.textContent = 'Collapse test directories';
+  } else {
+    button.textContent = 'Done';
+  }
 
   let fallbackStatus: string;
   if (targets.length === 0 && directoryControls === 0) {
@@ -132,7 +137,9 @@ function updateControl(host: HTMLElement, state: ControlState, message?: string)
   } else if (remaining === 0 && expandedDirectories > 0) {
     fallbackStatus = `${expandedDirectories} test director${expandedDirectories === 1 ? 'y' : 'ies'} to collapse.`;
   } else if (remaining === 0) {
-    fallbackStatus = 'Matching files viewed; click to retry sidebar collapse.';
+    fallbackStatus = targets.length > 0
+      ? `All ${targets.length} matching file${targets.length === 1 ? '' : 's'} viewed; test directories collapsed.`
+      : 'All test directories collapsed.';
   } else {
     fallbackStatus = `${remaining} matching file${remaining === 1 ? '' : 's'} to mark.`;
   }

@@ -234,7 +234,7 @@
     const host = document.createElement("div");
     host.id = CONTROL_ID;
     host.setAttribute("data-extension", "github-test-file-reviewer");
-    host.dataset.extensionVersion = "0.2.1";
+    host.dataset.extensionVersion = "0.2.2";
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
     <style>
@@ -292,7 +292,7 @@
       [role="status"] { color: var(--fgColor-muted, GrayText); margin-top: 7px; }
     </style>
     <details>
-      <summary>Test files <span class="version">v${"0.2.1"}</span></summary>
+      <summary>Test files <span class="version">v${"0.2.2"}</span></summary>
       <div class="body">
         <button type="button">Mark as viewed</button>
         <div role="status" aria-live="polite"></div>
@@ -314,15 +314,24 @@
     const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
     const directoryControls = findTestDirectoryControls().length;
     const expandedDirectories = findExpandedTestDirectoryControls().length;
-    button.disabled = state === "working";
-    button.textContent = state === "working" ? "Marking\u2026" : remaining === 0 ? "Collapse test directories" : "Mark as viewed";
+    const hasWork = remaining > 0 || expandedDirectories > 0;
+    button.disabled = state === "working" || !hasWork;
+    if (state === "working") {
+      button.textContent = "Marking\u2026";
+    } else if (remaining > 0) {
+      button.textContent = "Mark as viewed";
+    } else if (expandedDirectories > 0) {
+      button.textContent = "Collapse test directories";
+    } else {
+      button.textContent = "Done";
+    }
     let fallbackStatus;
     if (targets.length === 0 && directoryControls === 0) {
       fallbackStatus = "No matching files found.";
     } else if (remaining === 0 && expandedDirectories > 0) {
       fallbackStatus = `${expandedDirectories} test director${expandedDirectories === 1 ? "y" : "ies"} to collapse.`;
     } else if (remaining === 0) {
-      fallbackStatus = "Matching files viewed; click to retry sidebar collapse.";
+      fallbackStatus = targets.length > 0 ? `All ${targets.length} matching file${targets.length === 1 ? "" : "s"} viewed; test directories collapsed.` : "All test directories collapsed.";
     } else {
       fallbackStatus = `${remaining} matching file${remaining === 1 ? "" : "s"} to mark.`;
     }
