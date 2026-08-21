@@ -23,6 +23,8 @@ Shown on [`generaltranslation/gt` pull request #2062](https://github.com/general
 3. Enable **Developer mode**.
 4. Choose **Load unpacked** and select this repository's `dist` directory.
 
+After rebuilding an extension that is already loaded, click **Reload** on its `chrome://extensions` card, then reload the GitHub tab. Reloading the page alone continues using the content script Chrome previously loaded. The control shows its active extension version beside **Test files**.
+
 ## Use
 
 Open a GitHub pull request's **Files changed** page. Open the **Test files** dropdown at the lower right and click **Mark as viewed**. Already-viewed files are left alone, and expanded `__test__` and `__tests__` directories in the sidebar are collapsed at the same time. The action remains available when matching files are already viewed but a test directory is still expanded.

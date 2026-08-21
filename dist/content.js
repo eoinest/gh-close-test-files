@@ -144,6 +144,7 @@
     const host = document.createElement("div");
     host.id = CONTROL_ID;
     host.setAttribute("data-extension", "github-test-file-reviewer");
+    host.dataset.extensionVersion = "0.2.0";
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
     <style>
@@ -176,6 +177,7 @@
       summary::-webkit-details-marker { display: none; }
       summary::after { content: " \u25BE"; font-size: 11px; }
       details[open] summary::after { content: " \u25B4"; }
+      .version { color: var(--fgColor-muted, GrayText); font-weight: 400; }
 
       .body {
         border-top: 1px solid var(--borderColor-muted, ButtonBorder);
@@ -200,7 +202,7 @@
       [role="status"] { color: var(--fgColor-muted, GrayText); margin-top: 7px; }
     </style>
     <details>
-      <summary>Test files</summary>
+      <summary>Test files <span class="version">v${"0.2.0"}</span></summary>
       <div class="body">
         <button type="button">Mark as viewed</button>
         <div role="status" aria-live="polite"></div>

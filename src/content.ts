@@ -6,6 +6,8 @@ import {
 } from './github.ts';
 import { isPullRequestChangesPath } from './matching.ts';
 
+declare const __EXTENSION_VERSION__: string;
+
 const CONTROL_ID = 'gh-test-file-reviewer';
 const LOADING_OVERLAY_ID = 'gh-test-file-reviewer-loading';
 const SETTLE_TIMEOUT_MS = 10_000;
@@ -30,6 +32,7 @@ function createControl(): HTMLElement {
   const host = document.createElement('div');
   host.id = CONTROL_ID;
   host.setAttribute('data-extension', 'github-test-file-reviewer');
+  host.dataset.extensionVersion = __EXTENSION_VERSION__;
   const shadow = host.attachShadow({ mode: 'open' });
 
   shadow.innerHTML = `
@@ -63,6 +66,7 @@ function createControl(): HTMLElement {
       summary::-webkit-details-marker { display: none; }
       summary::after { content: " ▾"; font-size: 11px; }
       details[open] summary::after { content: " ▴"; }
+      .version { color: var(--fgColor-muted, GrayText); font-weight: 400; }
 
       .body {
         border-top: 1px solid var(--borderColor-muted, ButtonBorder);
@@ -87,7 +91,7 @@ function createControl(): HTMLElement {
       [role="status"] { color: var(--fgColor-muted, GrayText); margin-top: 7px; }
     </style>
     <details>
-      <summary>Test files</summary>
+      <summary>Test files <span class="version">v${__EXTENSION_VERSION__}</span></summary>
       <div class="body">
         <button type="button">Mark as viewed</button>
         <div role="status" aria-live="polite"></div>
