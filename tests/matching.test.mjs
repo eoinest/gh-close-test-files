@@ -31,6 +31,9 @@ test('matches __test__ and __tests__ directory segments in file-tree labels', ()
   assert.equal(containsTestDirectory('src\\__TEST__\\unit'), true);
   assert.equal(containsTestDirectory('__tests__'), true);
   assert.equal(containsTestDirectory('packages/next/src/utils/__TESTS__'), true);
+  assert.equal(containsTestDirectory('Collapse directory: __tests__'), true);
+  assert.equal(containsTestDirectory('Collapse __tests__ directory'), true);
+  assert.equal(containsTestDirectory('Directory (__tests__), expanded'), true);
   assert.equal(containsTestDirectory('src/button.__test__'), false);
   assert.equal(containsTestDirectory('src/__test__-fixtures'), false);
   assert.equal(containsTestDirectory('src/__testing__'), false);

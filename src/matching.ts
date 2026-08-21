@@ -12,8 +12,5 @@ export function isTestFilePath(path: string): boolean {
 }
 
 export function containsTestDirectory(path: string): boolean {
-  return path
-    .toLocaleLowerCase('en-US')
-    .split(/[\\/]/)
-    .some((segment) => ['__test__', '__tests__'].includes(segment.trim()));
+  return /(^|[^a-z0-9_.-])__tests?__(?=$|[^a-z0-9_.-])/i.test(path.trim());
 }

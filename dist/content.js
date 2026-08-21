@@ -11,7 +11,7 @@
     return normalizedPath.includes("__test__") || filename.includes(".test.");
   }
   function containsTestDirectory(path) {
-    return path.toLocaleLowerCase("en-US").split(/[\\/]/).some((segment) => ["__test__", "__tests__"].includes(segment.trim()));
+    return /(^|[^a-z0-9_.-])__tests?__(?=$|[^a-z0-9_.-])/i.test(path.trim());
   }
 
   // src/github.ts
@@ -23,10 +23,22 @@
     "[data-file-path]",
     "[data-tagsearch-path]"
   ].join(",");
-  var EXPANDED_FILE_TREE_DIRECTORY_SELECTOR = [
-    '[role="tree"][aria-label="File Tree"] button[aria-expanded="true"]',
-    '[aria-label="File Tree Navigation"] button[aria-expanded="true"]',
-    'file-tree [data-tree-entry-type="directory"] > button[aria-expanded="true"]'
+  var FILE_TREE_ROOT_SELECTOR = [
+    '[role="tree"]',
+    '[role="tree"][aria-label="File Tree"]',
+    '[aria-label*="file tree" i]',
+    '[aria-label="File Tree Navigation"]',
+    "file-tree",
+    '[data-target*="fileTree"]',
+    '[data-testid*="file-tree"]'
+  ].join(",");
+  var DIRECTORY_CANDIDATE_SELECTOR = [
+    "[aria-expanded]",
+    '[aria-label*="directory" i]',
+    '[title*="directory" i]',
+    '[role="treeitem"]',
+    '[data-tree-entry-type="directory"]',
+    "details"
   ].join(",");
   function normalized(value) {
     return value?.trim().replace(/^\u200e/, "") ?? "";
@@ -117,11 +129,88 @@
   function findTestReviewTargets(root = document) {
     return findReviewTargets(root).filter(({ path }) => isTestFilePath(path));
   }
-  function findExpandedTestDirectoryControls(root = document) {
-    const controls = root.querySelectorAll(
-      EXPANDED_FILE_TREE_DIRECTORY_SELECTOR
+  function textWithoutNestedGroups(element) {
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('[role="group"], ul, ol').forEach((group) => group.remove());
+    return normalized(clone.textContent);
+  }
+  function directoryLabel(element) {
+    return [
+      element.getAttribute("aria-label") ?? "",
+      element.getAttribute("title") ?? "",
+      element.getAttribute("data-path") ?? "",
+      element.getAttribute("data-name") ?? "",
+      textWithoutNestedGroups(element)
+    ].join(" ");
+  }
+  function directoryNode(candidate) {
+    return candidate.closest([
+      '[role="treeitem"]',
+      '[data-tree-entry-type="directory"]',
+      "details"
+    ].join(",")) ?? candidate;
+  }
+  function directoryControl(node, candidate) {
+    if (candidate.matches('button, [role="button"], summary')) return candidate;
+    return node.querySelector([
+      ":scope > button",
+      ':scope > [role="button"]',
+      ":scope > summary",
+      ':scope > :not([role="group"]) button',
+      ':scope > :not([role="group"]) [role="button"]',
+      ':scope > :not([role="group"]) [aria-label*="directory" i]',
+      ':scope > :not([role="group"]) [title*="directory" i]'
+    ].join(",")) ?? node;
+  }
+  function explicitExpandedState(element) {
+    const ariaExpanded = element.getAttribute("aria-expanded");
+    if (ariaExpanded === "true") return true;
+    if (ariaExpanded === "false") return false;
+    if (element.matches("details")) return element.hasAttribute("open");
+    const state = `${element.getAttribute("data-state") ?? ""} ${element.className}`;
+    if (/\b(expanded|open)\b/i.test(state)) return true;
+    if (/\b(collapsed|closed)\b/i.test(state)) return false;
+    const actionLabel = `${element.getAttribute("aria-label") ?? ""} ${element.getAttribute("title") ?? ""}`;
+    if (/\bcollapse\b/i.test(actionLabel)) return true;
+    if (/\bexpand\b/i.test(actionLabel)) return false;
+    return null;
+  }
+  function visibleChildGroup(node) {
+    const group = node.querySelector(
+      ':scope > [role="group"], :scope > ul, :scope > ol'
     );
-    return Array.from(controls).filter((control) => containsTestDirectory(normalized(control.textContent)));
+    if (!group || group.hidden || group.getAttribute("aria-hidden") === "true") return false;
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      const style = window.getComputedStyle(group);
+      return style.display !== "none" && style.visibility !== "hidden";
+    }
+    return true;
+  }
+  function isExpandedDirectory(node, control) {
+    return explicitExpandedState(control) ?? explicitExpandedState(node) ?? visibleChildGroup(node);
+  }
+  function findTestDirectoryControls(root = document) {
+    const controls = [];
+    const seen = /* @__PURE__ */ new Set();
+    const roots = root.querySelectorAll(FILE_TREE_ROOT_SELECTOR);
+    for (const tree of roots) {
+      for (const candidate of tree.querySelectorAll(DIRECTORY_CANDIDATE_SELECTOR)) {
+        const node = directoryNode(candidate);
+        if (node.dataset.treeEntryType === "file") continue;
+        if (!containsTestDirectory(directoryLabel(node))) continue;
+        const control = directoryControl(node, candidate);
+        if (seen.has(control)) continue;
+        seen.add(control);
+        controls.push(control);
+      }
+    }
+    return controls;
+  }
+  function findExpandedTestDirectoryControls(root = document) {
+    return findTestDirectoryControls(root).filter((control) => {
+      const node = directoryNode(control);
+      return isExpandedDirectory(node, control);
+    });
   }
 
   // src/content.ts
@@ -132,6 +221,7 @@
   var suppressRefreshUntil = 0;
   var collapseTestDirectoriesUntil = 0;
   var lastPageMutationAt = window.performance.now();
+  var attemptedDirectoryControls = /* @__PURE__ */ new WeakSet();
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
@@ -144,7 +234,7 @@
     const host = document.createElement("div");
     host.id = CONTROL_ID;
     host.setAttribute("data-extension", "github-test-file-reviewer");
-    host.dataset.extensionVersion = "0.2.0";
+    host.dataset.extensionVersion = "0.2.1";
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
     <style>
@@ -202,7 +292,7 @@
       [role="status"] { color: var(--fgColor-muted, GrayText); margin-top: 7px; }
     </style>
     <details>
-      <summary>Test files <span class="version">v${"0.2.0"}</span></summary>
+      <summary>Test files <span class="version">v${"0.2.1"}</span></summary>
       <div class="body">
         <button type="button">Mark as viewed</button>
         <div role="status" aria-live="polite"></div>
@@ -222,15 +312,27 @@
     host.dataset.controlState = state;
     const targets = findTestReviewTargets();
     const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
+    const directoryControls = findTestDirectoryControls().length;
     const expandedDirectories = findExpandedTestDirectoryControls().length;
-    button.disabled = state === "working" || remaining === 0 && expandedDirectories === 0;
-    button.textContent = state === "working" ? "Marking\u2026" : "Mark as viewed";
-    status.textContent = message ?? (targets.length === 0 && expandedDirectories === 0 ? "No matching files found." : remaining === 0 && expandedDirectories === 0 ? `All ${targets.length} matching file${targets.length === 1 ? "" : "s"} viewed.` : remaining === 0 ? `${expandedDirectories} test director${expandedDirectories === 1 ? "y" : "ies"} to collapse.` : `${remaining} matching file${remaining === 1 ? "" : "s"} to mark.`);
+    button.disabled = state === "working";
+    button.textContent = state === "working" ? "Marking\u2026" : remaining === 0 ? "Collapse test directories" : "Mark as viewed";
+    let fallbackStatus;
+    if (targets.length === 0 && directoryControls === 0) {
+      fallbackStatus = "No matching files found.";
+    } else if (remaining === 0 && expandedDirectories > 0) {
+      fallbackStatus = `${expandedDirectories} test director${expandedDirectories === 1 ? "y" : "ies"} to collapse.`;
+    } else if (remaining === 0) {
+      fallbackStatus = "Matching files viewed; click to retry sidebar collapse.";
+    } else {
+      fallbackStatus = `${remaining} matching file${remaining === 1 ? "" : "s"} to mark.`;
+    }
+    status.textContent = message ?? fallbackStatus;
   }
   function collapseExpandedTestDirectories() {
     let collapsed = 0;
     for (const control of findExpandedTestDirectoryControls()) {
-      if (!control.isConnected || control.getAttribute("aria-expanded") !== "true") continue;
+      if (!control.isConnected || attemptedDirectoryControls.has(control)) continue;
+      attemptedDirectoryControls.add(control);
       control.click();
       collapsed += 1;
     }
@@ -239,19 +341,15 @@
   async function markTestFilesViewed(host) {
     if (host.dataset.controlState === "working") return;
     const targets = findTestReviewTargets().filter(({ control }) => control.isConnected && !isReviewControlChecked(control) && !isReviewControlDisabled(control));
-    const expandedDirectories = findExpandedTestDirectoryControls();
-    if (targets.length === 0 && expandedDirectories.length === 0) {
-      updateControl(host, "idle", "No files needed updating.");
-      return;
-    }
     collapseTestDirectoriesUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
     suppressRefreshUntil = collapseTestDirectoriesUntil;
+    attemptedDirectoryControls = /* @__PURE__ */ new WeakSet();
     if (targets.length === 0) {
       const collapsed = collapseExpandedTestDirectories();
       updateControl(
         host,
         "idle",
-        `Collapsed ${collapsed} test director${collapsed === 1 ? "y" : "ies"}.`
+        collapsed > 0 ? `Collapsed ${collapsed} test director${collapsed === 1 ? "y" : "ies"}.` : "No expanded test directories found; you can retry."
       );
       return;
     }

@@ -16,10 +16,23 @@ const FILE_CONTAINER_SELECTOR = [
   '[data-tagsearch-path]',
 ].join(',');
 
-const EXPANDED_FILE_TREE_DIRECTORY_SELECTOR = [
-  '[role="tree"][aria-label="File Tree"] button[aria-expanded="true"]',
-  '[aria-label="File Tree Navigation"] button[aria-expanded="true"]',
-  'file-tree [data-tree-entry-type="directory"] > button[aria-expanded="true"]',
+const FILE_TREE_ROOT_SELECTOR = [
+  '[role="tree"]',
+  '[role="tree"][aria-label="File Tree"]',
+  '[aria-label*="file tree" i]',
+  '[aria-label="File Tree Navigation"]',
+  'file-tree',
+  '[data-target*="fileTree"]',
+  '[data-testid*="file-tree"]',
+].join(',');
+
+const DIRECTORY_CANDIDATE_SELECTOR = [
+  '[aria-expanded]',
+  '[aria-label*="directory" i]',
+  '[title*="directory" i]',
+  '[role="treeitem"]',
+  '[data-tree-entry-type="directory"]',
+  'details',
 ].join(',');
 
 function normalized(value: string | null | undefined): string {
@@ -143,14 +156,106 @@ export function findTestReviewTargets(root: ParentNode = document): ReviewTarget
   return findReviewTargets(root).filter(({ path }) => isTestFilePath(path));
 }
 
+function textWithoutNestedGroups(element: Element): string {
+  const clone = element.cloneNode(true) as Element;
+  clone.querySelectorAll('[role="group"], ul, ol').forEach((group) => group.remove());
+  return normalized(clone.textContent);
+}
+
+function directoryLabel(element: Element): string {
+  return [
+    element.getAttribute('aria-label') ?? '',
+    element.getAttribute('title') ?? '',
+    element.getAttribute('data-path') ?? '',
+    element.getAttribute('data-name') ?? '',
+    textWithoutNestedGroups(element),
+  ].join(' ');
+}
+
+function directoryNode(candidate: HTMLElement): HTMLElement {
+  return candidate.closest<HTMLElement>([
+    '[role="treeitem"]',
+    '[data-tree-entry-type="directory"]',
+    'details',
+  ].join(',')) ?? candidate;
+}
+
+function directoryControl(node: HTMLElement, candidate: HTMLElement): HTMLElement {
+  if (candidate.matches('button, [role="button"], summary')) return candidate;
+
+  return node.querySelector<HTMLElement>([
+    ':scope > button',
+    ':scope > [role="button"]',
+    ':scope > summary',
+    ':scope > :not([role="group"]) button',
+    ':scope > :not([role="group"]) [role="button"]',
+    ':scope > :not([role="group"]) [aria-label*="directory" i]',
+    ':scope > :not([role="group"]) [title*="directory" i]',
+  ].join(',')) ?? node;
+}
+
+function explicitExpandedState(element: Element): boolean | null {
+  const ariaExpanded = element.getAttribute('aria-expanded');
+  if (ariaExpanded === 'true') return true;
+  if (ariaExpanded === 'false') return false;
+  if (element.matches('details')) return element.hasAttribute('open');
+
+  const state = `${element.getAttribute('data-state') ?? ''} ${element.className}`;
+  if (/\b(expanded|open)\b/i.test(state)) return true;
+  if (/\b(collapsed|closed)\b/i.test(state)) return false;
+
+  const actionLabel = `${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('title') ?? ''}`;
+  if (/\bcollapse\b/i.test(actionLabel)) return true;
+  if (/\bexpand\b/i.test(actionLabel)) return false;
+  return null;
+}
+
+function visibleChildGroup(node: HTMLElement): boolean {
+  const group = node.querySelector<HTMLElement>(
+    ':scope > [role="group"], :scope > ul, :scope > ol',
+  );
+  if (!group || group.hidden || group.getAttribute('aria-hidden') === 'true') return false;
+
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    const style = window.getComputedStyle(group);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  return true;
+}
+
+function isExpandedDirectory(node: HTMLElement, control: HTMLElement): boolean {
+  return explicitExpandedState(control)
+    ?? explicitExpandedState(node)
+    ?? visibleChildGroup(node);
+}
+
+export function findTestDirectoryControls(root: ParentNode = document): HTMLElement[] {
+  const controls: HTMLElement[] = [];
+  const seen = new Set<HTMLElement>();
+  const roots = root.querySelectorAll<HTMLElement>(FILE_TREE_ROOT_SELECTOR);
+
+  for (const tree of roots) {
+    for (const candidate of tree.querySelectorAll<HTMLElement>(DIRECTORY_CANDIDATE_SELECTOR)) {
+      const node = directoryNode(candidate);
+      if (node.dataset.treeEntryType === 'file') continue;
+      if (!containsTestDirectory(directoryLabel(node))) continue;
+
+      const control = directoryControl(node, candidate);
+      if (seen.has(control)) continue;
+      seen.add(control);
+      controls.push(control);
+    }
+  }
+
+  return controls;
+}
+
 export function findExpandedTestDirectoryControls(
   root: ParentNode = document,
-): HTMLButtonElement[] {
-  const controls = root.querySelectorAll<HTMLButtonElement>(
-    EXPANDED_FILE_TREE_DIRECTORY_SELECTOR,
-  );
-
-  return Array.from(controls).filter((control) => (
-    containsTestDirectory(normalized(control.textContent))
-  ));
+): HTMLElement[] {
+  return findTestDirectoryControls(root).filter((control) => {
+    const node = directoryNode(control);
+    return isExpandedDirectory(node, control);
+  });
 }

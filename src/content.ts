@@ -1,5 +1,6 @@
 import {
   findExpandedTestDirectoryControls,
+  findTestDirectoryControls,
   findTestReviewTargets,
   isReviewControlChecked,
   isReviewControlDisabled,
@@ -15,6 +16,7 @@ const DOM_QUIET_MS = 350;
 let suppressRefreshUntil = 0;
 let collapseTestDirectoriesUntil = 0;
 let lastPageMutationAt = window.performance.now();
+let attemptedDirectoryControls = new WeakSet<HTMLElement>();
 
 type ControlState = 'idle' | 'working';
 
@@ -115,25 +117,34 @@ function updateControl(host: HTMLElement, state: ControlState, message?: string)
   host.dataset.controlState = state;
   const targets = findTestReviewTargets();
   const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
+  const directoryControls = findTestDirectoryControls().length;
   const expandedDirectories = findExpandedTestDirectoryControls().length;
-  button.disabled = state === 'working' || (remaining === 0 && expandedDirectories === 0);
-  button.textContent = state === 'working' ? 'Marking…' : 'Mark as viewed';
-  status.textContent = message ?? (
-    targets.length === 0 && expandedDirectories === 0
-      ? 'No matching files found.'
-      : remaining === 0 && expandedDirectories === 0
-        ? `All ${targets.length} matching file${targets.length === 1 ? '' : 's'} viewed.`
-        : remaining === 0
-          ? `${expandedDirectories} test director${expandedDirectories === 1 ? 'y' : 'ies'} to collapse.`
-        : `${remaining} matching file${remaining === 1 ? '' : 's'} to mark.`
-  );
+  button.disabled = state === 'working';
+  button.textContent = state === 'working'
+    ? 'Marking…'
+    : remaining === 0
+      ? 'Collapse test directories'
+      : 'Mark as viewed';
+
+  let fallbackStatus: string;
+  if (targets.length === 0 && directoryControls === 0) {
+    fallbackStatus = 'No matching files found.';
+  } else if (remaining === 0 && expandedDirectories > 0) {
+    fallbackStatus = `${expandedDirectories} test director${expandedDirectories === 1 ? 'y' : 'ies'} to collapse.`;
+  } else if (remaining === 0) {
+    fallbackStatus = 'Matching files viewed; click to retry sidebar collapse.';
+  } else {
+    fallbackStatus = `${remaining} matching file${remaining === 1 ? '' : 's'} to mark.`;
+  }
+  status.textContent = message ?? fallbackStatus;
 }
 
 function collapseExpandedTestDirectories(): number {
   let collapsed = 0;
 
   for (const control of findExpandedTestDirectoryControls()) {
-    if (!control.isConnected || control.getAttribute('aria-expanded') !== 'true') continue;
+    if (!control.isConnected || attemptedDirectoryControls.has(control)) continue;
+    attemptedDirectoryControls.add(control);
     control.click();
     collapsed += 1;
   }
@@ -150,22 +161,19 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
       && !isReviewControlChecked(control)
       && !isReviewControlDisabled(control)
     ));
-  const expandedDirectories = findExpandedTestDirectoryControls();
-
-  if (targets.length === 0 && expandedDirectories.length === 0) {
-    updateControl(host, 'idle', 'No files needed updating.');
-    return;
-  }
 
   collapseTestDirectoriesUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
   suppressRefreshUntil = collapseTestDirectoriesUntil;
+  attemptedDirectoryControls = new WeakSet<HTMLElement>();
 
   if (targets.length === 0) {
     const collapsed = collapseExpandedTestDirectories();
     updateControl(
       host,
       'idle',
-      `Collapsed ${collapsed} test director${collapsed === 1 ? 'y' : 'ies'}.`,
+      collapsed > 0
+        ? `Collapsed ${collapsed} test director${collapsed === 1 ? 'y' : 'ies'}.`
+        : 'No expanded test directories found; you can retry.',
     );
     return;
   }
