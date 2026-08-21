@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.25.9",
+    "linkedom": "^0.18.13",
     "typescript": "^5.9.2"
   }
 }
-

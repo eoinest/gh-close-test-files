@@ -3,14 +3,15 @@ import {
   findTestReviewTargets,
   isReviewControlChecked,
   isReviewControlDisabled,
-} from './github';
-import { isPullRequestChangesPath } from './matching';
+} from './github.ts';
+import { isPullRequestChangesPath } from './matching.ts';
 
 const CONTROL_ID = 'gh-test-file-reviewer';
 const LOADING_OVERLAY_ID = 'gh-test-file-reviewer-loading';
 const SETTLE_TIMEOUT_MS = 10_000;
 const DOM_QUIET_MS = 350;
 let suppressRefreshUntil = 0;
+let collapseTestDirectoriesUntil = 0;
 let lastPageMutationAt = window.performance.now();
 
 type ControlState = 'idle' | 'working';
@@ -110,15 +111,30 @@ function updateControl(host: HTMLElement, state: ControlState, message?: string)
   host.dataset.controlState = state;
   const targets = findTestReviewTargets();
   const remaining = targets.filter(({ control }) => !isReviewControlChecked(control)).length;
-  button.disabled = state === 'working' || remaining === 0;
+  const expandedDirectories = findExpandedTestDirectoryControls().length;
+  button.disabled = state === 'working' || (remaining === 0 && expandedDirectories === 0);
   button.textContent = state === 'working' ? 'Marking…' : 'Mark as viewed';
   status.textContent = message ?? (
-    targets.length === 0
+    targets.length === 0 && expandedDirectories === 0
       ? 'No matching files found.'
-      : remaining === 0
+      : remaining === 0 && expandedDirectories === 0
         ? `All ${targets.length} matching file${targets.length === 1 ? '' : 's'} viewed.`
+        : remaining === 0
+          ? `${expandedDirectories} test director${expandedDirectories === 1 ? 'y' : 'ies'} to collapse.`
         : `${remaining} matching file${remaining === 1 ? '' : 's'} to mark.`
   );
+}
+
+function collapseExpandedTestDirectories(): number {
+  let collapsed = 0;
+
+  for (const control of findExpandedTestDirectoryControls()) {
+    if (!control.isConnected || control.getAttribute('aria-expanded') !== 'true') continue;
+    control.click();
+    collapsed += 1;
+  }
+
+  return collapsed;
 }
 
 async function markTestFilesViewed(host: HTMLElement): Promise<void> {
@@ -130,11 +146,27 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
       && !isReviewControlChecked(control)
       && !isReviewControlDisabled(control)
     ));
+  const expandedDirectories = findExpandedTestDirectoryControls();
 
-  if (targets.length === 0) {
+  if (targets.length === 0 && expandedDirectories.length === 0) {
     updateControl(host, 'idle', 'No files needed updating.');
     return;
   }
+
+  collapseTestDirectoriesUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
+  suppressRefreshUntil = collapseTestDirectoriesUntil;
+
+  if (targets.length === 0) {
+    const collapsed = collapseExpandedTestDirectories();
+    updateControl(
+      host,
+      'idle',
+      `Collapsed ${collapsed} test director${collapsed === 1 ? 'y' : 'ies'}.`,
+    );
+    return;
+  }
+
+  let collapsedDirectories = collapseExpandedTestDirectories() > 0;
 
   updateControl(
     host,
@@ -143,8 +175,6 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
   );
 
   let marked = 0;
-  let collapsedDirectories = 0;
-  suppressRefreshUntil = window.performance.now() + SETTLE_TIMEOUT_MS;
   const loadingOverlay = showLoadingOverlay(targets.length);
   await waitForPaint();
 
@@ -153,14 +183,9 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
       control.click();
     }
 
-    for (const control of findExpandedTestDirectoryControls()) {
-      if (!control.isConnected || control.getAttribute('aria-expanded') !== 'true') continue;
-      control.click();
-      collapsedDirectories += 1;
-    }
-
     const deadline = window.performance.now() + SETTLE_TIMEOUT_MS;
     do {
+      collapsedDirectories = collapseExpandedTestDirectories() > 0 || collapsedDirectories;
       marked = targets.filter(({ control }) => (
         !control.isConnected || isReviewControlChecked(control)
       )).length;
@@ -179,9 +204,7 @@ async function markTestFilesViewed(host: HTMLElement): Promise<void> {
       ? `Queued ${targets.length} files; GitHub is still updating.`
       : [
           `Marked ${marked} file${marked === 1 ? '' : 's'} as viewed`,
-          collapsedDirectories === 0
-            ? '.'
-            : ` and collapsed ${collapsedDirectories} __test__ director${collapsedDirectories === 1 ? 'y' : 'ies'}.`,
+          collapsedDirectories ? ' and collapsed test directories.' : '.',
         ].join(''),
   );
 }
@@ -254,6 +277,7 @@ function syncControl(): void {
   const existing = document.getElementById(CONTROL_ID);
 
   if (!isPullRequestChangesPath(window.location.pathname)) {
+    collapseTestDirectoriesUntil = 0;
     existing?.remove();
     return;
   }
@@ -264,6 +288,9 @@ function syncControl(): void {
 let refreshTimer = 0;
 const observer = new MutationObserver(() => {
   lastPageMutationAt = window.performance.now();
+  if (lastPageMutationAt < collapseTestDirectoriesUntil) {
+    collapseExpandedTestDirectories();
+  }
   window.clearTimeout(refreshTimer);
   refreshTimer = window.setTimeout(() => {
     if (window.performance.now() < suppressRefreshUntil) return;
@@ -276,6 +303,11 @@ const observer = new MutationObserver(() => {
 });
 
 syncControl();
-observer.observe(document.documentElement, { childList: true, subtree: true });
+observer.observe(document.documentElement, {
+  attributeFilter: ['aria-expanded'],
+  attributes: true,
+  childList: true,
+  subtree: true,
+});
 window.addEventListener('popstate', syncControl);
 document.addEventListener('turbo:load', syncControl);

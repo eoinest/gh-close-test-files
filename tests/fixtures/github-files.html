@@ -23,8 +23,12 @@
           <ul role="group"><li role="treeitem">button.ts</li></ul>
         </li>
         <li role="treeitem" data-tree-entry-type="directory">
-          <button type="button" aria-expanded="true">__tests__</button>
+          <button type="button" aria-expanded="true">packages/next/src/utils/__tests__</button>
           <ul role="group"><li role="treeitem">plural.ts</li></ul>
+        </li>
+        <li role="treeitem" data-tree-entry-type="directory">
+          <button type="button" aria-expanded="true">__testing__</button>
+          <ul role="group"><li role="treeitem">helper.ts</li></ul>
         </li>
       </ul>
     </nav>
@@ -45,11 +49,36 @@
       <pre>test('dialog', () =&gt; {});</pre>
     </section>
     <script>
+      let delayedDirectoryScheduled = false;
+
+      function toggleDirectory(button) {
+        button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
+      }
+
+      function scheduleDelayedDirectory() {
+        if (delayedDirectoryScheduled) return;
+        delayedDirectoryScheduled = true;
+        setTimeout(() => {
+          const item = document.createElement('li');
+          item.id = 'delayed-test-directory';
+          item.setAttribute('role', 'treeitem');
+          item.dataset.treeEntryType = 'directory';
+          item.innerHTML = `
+            <button type="button" aria-expanded="true">delayed/__tests__</button>
+            <ul role="group"><li role="treeitem">async.ts</li></ul>
+          `;
+          const button = item.querySelector('button');
+          button.addEventListener('click', () => toggleDirectory(button));
+          document.querySelector('[role="tree"]').append(item);
+        }, 600);
+      }
+
       for (const checkbox of document.querySelectorAll('.js-reviewed-checkbox')) {
         checkbox.addEventListener('change', () => {
           const file = checkbox.closest('.js-file');
           const delay = Number(file.dataset.reviewDelay ?? 0);
           setTimeout(() => file.classList.toggle('reviewed', checkbox.checked), delay);
+          if (file.dataset.path.includes('__test__')) scheduleDelayedDirectory();
         });
       }
       for (const button of document.querySelectorAll('button[aria-pressed]')) {
@@ -62,9 +91,7 @@
         });
       }
       for (const button of document.querySelectorAll('[role="tree"] button[aria-expanded]')) {
-        button.addEventListener('click', () => {
-          button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
-        });
+        button.addEventListener('click', () => toggleDirectory(button));
       }
     </script>
     <script src="/dist/content.js"></script>

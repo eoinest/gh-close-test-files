@@ -15,5 +15,5 @@ export function containsTestDirectory(path: string): boolean {
   return path
     .toLocaleLowerCase('en-US')
     .split(/[\\/]/)
-    .some((segment) => segment.trim() === '__test__');
+    .some((segment) => ['__test__', '__tests__'].includes(segment.trim()));
 }

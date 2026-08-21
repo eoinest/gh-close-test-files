@@ -1,4 +1,4 @@
-import { containsTestDirectory, isTestFilePath } from './matching';
+import { containsTestDirectory, isTestFilePath } from './matching.ts';
 
 export interface ReviewTarget {
   control: ReviewControl;
@@ -16,7 +16,11 @@ const FILE_CONTAINER_SELECTOR = [
   '[data-tagsearch-path]',
 ].join(',');
 
-const FILE_TREE_SELECTOR = '[role="tree"][aria-label="File Tree"]';
+const EXPANDED_FILE_TREE_DIRECTORY_SELECTOR = [
+  '[role="tree"][aria-label="File Tree"] button[aria-expanded="true"]',
+  '[aria-label="File Tree Navigation"] button[aria-expanded="true"]',
+  'file-tree [data-tree-entry-type="directory"] > button[aria-expanded="true"]',
+].join(',');
 
 function normalized(value: string | null | undefined): string {
   return value?.trim().replace(/^\u200e/, '') ?? '';
@@ -143,7 +147,7 @@ export function findExpandedTestDirectoryControls(
   root: ParentNode = document,
 ): HTMLButtonElement[] {
   const controls = root.querySelectorAll<HTMLButtonElement>(
-    `${FILE_TREE_SELECTOR} button[aria-expanded="true"]`,
+    EXPANDED_FILE_TREE_DIRECTORY_SELECTOR,
   );
 
   return Array.from(controls).filter((control) => (
